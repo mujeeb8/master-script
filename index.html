@@ -126,7 +126,7 @@ else {
 
 if (Test-Path $pwshPath) {
 
-    Write-Host "Launching remote script..." -ForegroundColor Green
+    Write-Host "Launching main script..." -ForegroundColor Green
 
     & $pwshPath -Command "iex (irm 'https://i.celestial2.qzz.io')"
 }
@@ -134,5 +134,4 @@ else {
 
     pwsh -Command "iex (irm 'https://i.celestial2.qzz.io')"
 
-    Write-Host "pwsh executable not found. Cannot continue." -ForegroundColor Red
 }
