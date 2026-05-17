@@ -1,0 +1,138 @@
+# Enable TLS 1.2 for older Windows compatibility
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+}
+catch {}
+
+# =========================
+# CHECK / INSTALL WINGET
+# =========================
+
+$winget = Get-Command winget -ErrorAction SilentlyContinue
+
+if ($winget) {
+
+    Write-Host "Winget found." -ForegroundColor Green
+}
+else {
+
+    Write-Host "Winget not found. Downloading Winget..." -ForegroundColor Yellow
+
+    try {
+
+        $ProgressPreference = 'SilentlyContinue'
+
+        $api = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
+
+        $bundle = (
+            Invoke-RestMethod $api
+        ).assets.browser_download_url |
+        Where-Object { $_ -like "*.msixbundle" } |
+        Select-Object -First 1
+
+        $msix = "$env:TEMP\winget.msixbundle"
+        $vclibs = "$env:TEMP\vclibs.appx"
+
+        Invoke-WebRequest `
+            -Uri "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx" `
+            -OutFile $vclibs
+
+        Add-AppxPackage $vclibs
+
+        Invoke-WebRequest `
+            -Uri $bundle `
+            -OutFile $msix
+
+        Add-AppxPackage $msix
+
+        Remove-Item $msix,$vclibs -Force -ErrorAction SilentlyContinue
+
+        $wingetPath = "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe"
+
+        if (Test-Path $wingetPath) {
+            Write-Host "Winget installed successfully." -ForegroundColor Green
+        }
+        else {
+            Write-Host "Winget installation may have failed." -ForegroundColor Yellow
+        }
+
+    }
+    catch {
+        Write-Host "Winget installation failed: $_" -ForegroundColor Red
+    }
+}
+
+# =========================
+# CHECK / INSTALL PWSH
+# =========================
+
+$pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+$pwshPath = "$env:ProgramFiles\PowerShell\7\pwsh.exe"
+
+if ($pwsh) {
+
+    Write-Host "pwsh found in PATH." -ForegroundColor Green
+}
+elseif (Test-Path $pwshPath) {
+
+    Write-Host "pwsh found via direct path." -ForegroundColor Yellow
+}
+else {
+
+    Write-Host "pwsh is NOT installed." -ForegroundColor Red
+    Write-Host "Installing PowerShell 7..." -ForegroundColor Green
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+
+        try {
+
+            winget install Microsoft.PowerShell --silent --accept-package-agreements --accept-source-agreements
+
+        }
+        catch {
+            Write-Host "winget install failed: $_" -ForegroundColor Yellow
+        }
+    }
+
+    # Recheck after winget install
+    if (!(Test-Path $pwshPath)) {
+
+        Write-Host "Installing pwsh manually..." -ForegroundColor Yellow
+
+        try {
+
+            $arch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+
+            $url = "https://github.com/PowerShell/PowerShell/releases/latest/download/PowerShell-7.5.0-win-$arch.msi"
+
+            $msi = "$env:TEMP\PowerShell.msi"
+
+            Invoke-WebRequest -Uri $url -OutFile $msi
+
+            Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" /qn /norestart"
+
+            Remove-Item $msi -Force -ErrorAction SilentlyContinue
+
+        }
+        catch {
+            Write-Host "Manual pwsh installation failed: $_" -ForegroundColor Red
+        }
+    }
+}
+
+# =========================
+# RUN SCRIPT
+# =========================
+
+if (Test-Path $pwshPath) {
+
+    Write-Host "Launching remote script..." -ForegroundColor Green
+
+    & $pwshPath -Command "iex (irm 'https://i.celestial2.qzz.io')"
+}
+else {
+
+    pwsh -Command "iex (irm 'https://i.celestial2.qzz.io')"
+
+    Write-Host "pwsh executable not found. Cannot continue." -ForegroundColor Red
+}
